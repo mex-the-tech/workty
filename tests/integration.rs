@@ -11,7 +11,7 @@ fn git(dir: &std::path::Path, args: &[&str]) -> String {
 }
 
 fn git_init_repo(dir: &std::path::Path) {
-    git(dir, &["init"]);
+    git(dir, &["init", "-b", "main"]);
     git(dir, &["config", "user.email", "test@test.com"]);
     git(dir, &["config", "user.name", "Test User"]);
 
