@@ -45,6 +45,33 @@ impl GitRepo {
             .ok()
             .map(|s| s.trim().to_string())
     }
+
+    /// Attempts to detect the default branch of the repository.
+    ///
+    /// Strategy:
+    /// 1. Check the `HEAD` file in the common git directory (works for bare repos/worktrees).
+    /// 2. Fallback to checking for existence of "main".
+    /// 3. Fallback to checking for existence of "master".
+    pub fn default_branch(&self) -> Option<String> {
+        // 1. Try to read HEAD from the common git directory
+        // This usually points to the default branch if we are in a bare repo or the main worktree
+        let head_path = self.common_dir.join("HEAD");
+        if let Ok(contents) = std::fs::read_to_string(head_path) {
+            if let Some(ref_name) = contents.strip_prefix("ref: refs/heads/") {
+                return Some(ref_name.trim().to_string());
+            }
+        }
+
+        // 2. Fallbacks
+        const FALLBACK_BRANCHES: [&str; 2] = ["main", "master"];
+        for branch in FALLBACK_BRANCHES {
+            if branch_exists(self, branch) {
+                return Some(branch.to_string());
+            }
+        }
+
+        None
+    }
 }
 
 fn git_rev_parse(working_directory: &Path, args: &[&str]) -> Result<String> {

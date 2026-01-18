@@ -5,6 +5,7 @@ use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
 const CONFIG_FILENAME: &str = "workty.toml";
+const DEFAULT_BASE: &str = "main";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -20,7 +21,7 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             version: 1,
-            base: "main".to_string(),
+            base: DEFAULT_BASE.to_string(),
             root: "~/.workty/{repo}-{id}".to_string(),
             layout: "flat".to_string(),
             open_cmd: None,
@@ -49,16 +50,31 @@ impl Config {
             candidates.push(home.join(CONFIG_FILENAME));
         }
 
-        for path in candidates {
-            if path.exists() {
+        let mut config: Self = candidates
+            .into_iter()
+            .find(|path| path.exists())
+            .map(|path| {
                 let contents = std::fs::read_to_string(&path)
                     .with_context(|| format!("Failed to read config from {}", path.display()))?;
-                return toml::from_str(&contents)
-                    .with_context(|| format!("Failed to parse config from {}", path.display()));
+                toml::from_str(&contents)
+                    .with_context(|| format!("Failed to parse config from {}", path.display()))
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        config.adjust_defaults(repo);
+
+        Ok(config)
+    }
+
+    fn adjust_defaults(&mut self, repo: &GitRepo) {
+        // If the base branch is the default one but it doesn't exist,
+        // we try to detect the actual default branch (e.g. master, trunk, etc)
+        if self.base == DEFAULT_BASE && !crate::git::branch_exists(repo, DEFAULT_BASE) {
+            if let Some(default) = repo.default_branch() {
+                self.base = default;
             }
         }
-
-        Ok(Self::default())
     }
 
     #[allow(dead_code)]
